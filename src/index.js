@@ -14,27 +14,23 @@ commands.set(currencyprizeCommand.name, currencyprizeCommand.handler);
 
 
 function parseRow(html, rowIdentifier) {
-    const rowStartIndex = html.indexOf(rowIdentifier);
-    if (rowStartIndex === -1) return null;
+  const rowStartIndex = html.indexOf(rowIdentifier);
+  if (rowStartIndex === -1) return null;
 
-    const tableRowHtml = html.substring(rowStartIndex);
-    const cells = tableRowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/g);
+  const tableRowHtml = html.substring(rowStartIndex);
+  const cells = tableRowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/g);
 
-    if (!cells || cells.length < 2) return null;
+  if (!cells || cells.length < 2) return null;
 
-    // Updated 'clean' function to also remove LRM and RLM characters
-    const clean = (str) => str.replace(/<[^>]+>/g, '').replace(/&lrm;|&#8206;|&rlm;|&#8207;/gi, '').trim();
-    const value = clean(cells[0]);
-    const change = clean(cells[1]);
+  // Updated 'clean' function to also remove LRM and RLM characters
+  const clean = (str) => str.replace(/<[^>]+>/g, '').replace(/&lrm;|&#8206;|&rlm;|&#8207;/gi, '').trim();
+  const value = clean(cells[0]);
+  const change = clean(cells[1]);
 
-    return { value, change };
+  return { value, change };
 }
 
 
-/**
- * Perform the scheduled currency update and post to a configured chat.
- * If `env.CRON_CHAT_ID` is not set, the message is logged instead.
- */
 async function performScheduledCurrencyUpdate(env) {
   try {
     const response = await fetch('https://www.iranjib.ir/showgroup/23/realtime_price/');
@@ -46,7 +42,7 @@ async function performScheduledCurrencyUpdate(env) {
 
     if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
 
-    const message = `قیمت‌ها:\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})`;
+    const message = `قیمت‌ها:\n\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})`;
 
     // Insert values into D1 `prices` table if binding available.
     // We store the raw values (without the 'change') and an ISO datetime.
@@ -58,7 +54,7 @@ async function performScheduledCurrencyUpdate(env) {
           await env.DB.prepare('CREATE TABLE IF NOT EXISTS prices (dollar REAL, gold REAL, datetime TEXT)').run();
         } catch (createErr) {
           console.error('D1 create table error (ignoring):', createErr);
-          try { await notify('warn', 'D1 create table error (ignored)', String(createErr), env); } catch(e){ console.error('notify failed', e); }
+          try { await notify('warn', 'D1 create table error (ignored)', String(createErr), env); } catch (e) { console.error('notify failed', e); }
         }
         // Normalize numeric values before inserting
         const { parseNumber } = await import('./utils/number.js');
@@ -75,7 +71,7 @@ async function performScheduledCurrencyUpdate(env) {
       }
     } catch (dbErr) {
       console.error('D1 insert error:', dbErr);
-      try { await notify('error', 'D1 insert error', String(dbErr), env); } catch(e){ console.error('notify failed', e); }
+      try { await notify('error', 'D1 insert error', String(dbErr), env); } catch (e) { console.error('notify failed', e); }
     }
 
     if (env.CHANNEL_ID) {
@@ -85,7 +81,7 @@ async function performScheduledCurrencyUpdate(env) {
     }
   } catch (error) {
     console.error('performScheduledCurrencyUpdate error:', error);
-    try { await notify('error', 'performScheduledCurrencyUpdate error', String(error), env); } catch(e){ console.error('notify failed', e); }
+    try { await notify('error', 'performScheduledCurrencyUpdate error', String(error), env); } catch (e) { console.error('notify failed', e); }
     throw error;
   }
 }
@@ -93,10 +89,9 @@ async function performScheduledCurrencyUpdate(env) {
 
 export default {
   async fetch(request, env) {
-      
+
     const url = new URL(request.url);
 
-    // Manual trigger for the scheduled job (no secret required).
     // Call with POST to invoke `performScheduledCurrencyUpdate`.
     if (url.pathname === '/__run_scheduled') {
       if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
@@ -106,7 +101,7 @@ export default {
         return new Response('Scheduled job triggered', { status: 200 });
       } catch (e) {
         console.error('Manual scheduled trigger error:', e);
-        try { await notify('error', 'Manual scheduled trigger error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
+        try { await notify('error', 'Manual scheduled trigger error', String(e), env); } catch (nE) { console.error('notify failed', nE); }
         return new Response('Error: ' + (e.message || String(e)), { status: 500 });
       }
     }
@@ -130,52 +125,52 @@ export default {
 
           // send as media group (album)
           await telegram.sendMediaGroup(env.CHANNEL_ID, [
-            { buffer: buf1, filename: 'dollar.png', caption: 'Dollar - last 24h' },
-            { buffer: buf2, filename: 'gold.png', caption: 'Gold - last 24h' },
+            { buffer: buf1, filename: 'dollar.png', caption: 'تغییرات دلار در 24 ساعت گذشته' },
+            { buffer: buf2, filename: 'gold.png', caption: 'تغییرات طلا در 24 ساعت گذشته' },
           ], env);
 
           await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
         } catch (uploadErr) {
           console.error('Manual send chart upload error:', uploadErr);
-          try { await notify('error', 'Manual send chart upload error', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
+          try { await notify('error', 'Manual send chart upload error', String(uploadErr), env); } catch (nE) { console.error('notify failed', nE); }
           return new Response('Error: ' + (uploadErr.message || String(uploadErr)), { status: 500 });
         }
         return new Response('Chart generated and sent', { status: 200 });
       } catch (e) {
         console.error('Manual send chart error:', e);
-        try { await notify('error', 'Manual send chart error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
+        try { await notify('error', 'Manual send chart error', String(e), env); } catch (nE) { console.error('notify failed', nE); }
         return new Response('Error: ' + (e.message || String(e)), { status: 500 });
       }
     }
 
     // Handle API requests
     if (url.pathname.startsWith('/api/')) {
-        if (url.pathname === "/api/ping") {
-            return new Response(null, { status: 204 });
-        }
-        if (url.pathname === "/api/currency") {
-            try {
-                const response = await fetch('https://www.iranjib.ir/showgroup/23/realtime_price/');
-                if (!response.ok) throw new Error(`Failed to fetch data. Status: ${response.status}`);
-                
-                const htmlText = await response.text();
-                const goldData = parseRow(htmlText, 'هر گرم طلای ۱۸ عیار');
-                const tetherData = parseRow(htmlText, 'تتر');
+      if (url.pathname === "/api/ping") {
+        return new Response(null, { status: 204 });
+      }
+      if (url.pathname === "/api/currency") {
+        try {
+          const response = await fetch('https://www.iranjib.ir/showgroup/23/realtime_price/');
+          if (!response.ok) throw new Error(`Failed to fetch data. Status: ${response.status}`);
 
-                if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
+          const htmlText = await response.text();
+          const goldData = parseRow(htmlText, 'هر گرم طلای ۱۸ عیار');
+          const tetherData = parseRow(htmlText, 'تتر');
 
-                const data = { gold: goldData, tether: tetherData };
-                
-                return new Response(JSON.stringify(data), {
-                    headers: { 'Content-Type': 'application/json' },
-                });
-            } catch (error) {
-                console.error('Error fetching currency data:', error);
-                return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' }});
-            }
+          if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
+
+          const data = { gold: goldData, tether: tetherData };
+
+          return new Response(JSON.stringify(data), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        } catch (error) {
+          console.error('Error fetching currency data:', error);
+          return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
         }
+      }
     }
-    
+
     // Handle Telegram webhooks
     if (request.method === "POST") {
       const payload = await request.json();
@@ -184,14 +179,14 @@ export default {
 
     // Serve the web app's HTML on the root URL
     if (url.pathname === "/") {
-        return new Response(html, {
-            headers: { 'Content-Type': 'text/html;charset=UTF-8' },
-        });
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html;charset=UTF-8' },
+      });
     }
 
     return new Response("Not found.", { status: 404 });
   },
-  
+
   // Cloudflare Workers scheduled event handler. Runs on the cron configured in `wrangler.toml`.
   async scheduled(event, env) {
     try {
@@ -219,19 +214,19 @@ export default {
               ], env);
             } catch (uploadErr) {
               console.error('Failed to fetch/upload chart images:', uploadErr);
-              try { await notify('warn', 'Failed to fetch/upload chart images', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
+              try { await notify('warn', 'Failed to fetch/upload chart images', String(uploadErr), env); } catch (nE) { console.error('notify failed', nE); }
             }
           } else {
             console.log('Generated chart URLs (no CHANNEL_ID):', urls);
           }
         } catch (chartErr) {
           console.error('Chart generation/send error:', chartErr);
-          try { await notify('error', 'Chart generation/send error', String(chartErr), env); } catch(nE){ console.error('notify failed', nE); }
+          try { await notify('error', 'Chart generation/send error', String(chartErr), env); } catch (nE) { console.error('notify failed', nE); }
         }
       }
     } catch (e) {
       console.error('Scheduled job error:', e);
-      try { await notify('error', 'Scheduled job error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
+      try { await notify('error', 'Scheduled job error', String(e), env); } catch (nE) { console.error('notify failed', nE); }
     }
   },
 };
@@ -244,7 +239,7 @@ export default {
 async function handleUpdate(update, env) {
   if (update.message) {
     const message = update.message;
-    const text = message.text || ''; 
+    const text = message.text || '';
 
     // Check if the message text is a command
     if (text.startsWith('/')) {
@@ -254,15 +249,15 @@ async function handleUpdate(update, env) {
       if (commands.has(commandName)) {
         const handler = commands.get(commandName);
         try {
-            await handler(message, env, telegram);
-          } catch (e) {
-            console.error(`Error handling command ${commandName}:`, e);
-            try { await notify('error', `Error handling command ${commandName}`, String(e), env); } catch(nE){ console.error('notify failed', nE); }
-            await telegram.sendMessage(message.chat.id, 'An error occurred while processing your command.\n\n' + e, env, message.message_thread_id);
-          }
+          await handler(message, env, telegram);
+        } catch (e) {
+          console.error(`Error handling command ${commandName}:`, e);
+          try { await notify('error', `Error handling command ${commandName}`, String(e), env); } catch (nE) { console.error('notify failed', nE); }
+          await telegram.sendMessage(message.chat.id, 'An error occurred while processing your command.\n\n' + e, env, message.message_thread_id);
+        }
       }
-    } 
-    
+    }
+
   }
   return new Response("OK");
 }
