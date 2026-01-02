@@ -231,39 +231,25 @@ export default {
 async function handleUpdate(update, env) {
   if (update.message) {
     const message = update.message;
-    const text = message.text || '';
+    const text = message.text || ''; 
 
+    // Check if the message text is a command
     if (text.startsWith('/')) {
+      // Handles both /ping and /ping@YourBotName
       const commandName = text.split(' ')[0].split('@')[0];
 
       if (commands.has(commandName)) {
+        const handler = commands.get(commandName);
         try {
-          const handler = commands.get(commandName);
-
-            if (typeof handler === 'function') {
-              await handler(message, env, telegram);
-            } else if (handler && typeof handler.execute === 'function') {
-              await handler.execute(message, env, telegram);
-            } else {
-              console.error(`Invalid handler for command ${commandName}`);
-            }
-        } catch (e) {
-          console.error(`Error handling command ${commandName}:`, e);
-          try {
-            await notify('error', `Error handling command ${commandName}`, String(e), env);
-          } catch (nE) {
-            console.error('notify failed', nE);
+            await handler(message, env, telegram);
+          } catch (e) {
+            console.error(`Error handling command ${commandName}:`, e);
+            try { await notify('error', `Error handling command ${commandName}`, String(e), env); } catch(nE){ console.error('notify failed', nE); }
+            await telegram.sendMessage(message.chat.id, 'An error occurred while processing your command.\n\n' + e, env, message.message_thread_id);
           }
-          await telegram.sendMessage(
-            message.chat.id,
-            'An error occurred while processing your command.\n\n' + e,
-            env,
-            message.message_thread_id
-          );
-        }
       }
-    }
+    } 
+    
   }
-
-  return new Response('OK');
+  return new Response("OK");
 }
