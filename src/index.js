@@ -130,9 +130,9 @@ export default {
 
           // send as media group (album)
           await telegram.sendMediaGroup(env.CHANNEL_ID, [
-            { buffer: buf1, filename: 'dollar.png', caption: 'Dollar - last 24h' },
-            { buffer: buf2, filename: 'gold.png', caption: 'Gold - last 24h' },
-          ], env);
+            { buffer: buf1, filename: 'dollar.png', caption: 'قیمت دلار در 24 ساعت گذشته' },
+            { buffer: buf2, filename: 'gold.png', caption: 'قیمت طلا در 24 ساعت گذشته' },
+          ] + 'تغییرات قیمت در 24 ساعت گذشته.', env);
 
           await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
         } catch (uploadErr) {
