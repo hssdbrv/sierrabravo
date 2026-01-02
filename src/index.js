@@ -238,7 +238,15 @@ async function handleUpdate(update, env) {
 
       if (commands.has(commandName)) {
         try {
-          await commands.get(commandName)(message, env, telegram);
+          const handler = commands.get(commandName);
+
+            if (typeof handler === 'function') {
+              await handler(message, env, telegram);
+            } else if (handler && typeof handler.execute === 'function') {
+              await handler.execute(message, env, telegram);
+            } else {
+              console.error(`Invalid handler for command ${commandName}`);
+            }
         } catch (e) {
           console.error(`Error handling command ${commandName}:`, e);
           try {
