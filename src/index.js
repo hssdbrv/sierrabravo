@@ -46,6 +46,23 @@ async function performScheduledCurrencyUpdate(env) {
 
     const message = `قیمت‌ها:\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})`;
 
+    // Insert values into D1 `prices` table if binding available.
+    // We store the raw values (without the 'change') and an ISO datetime.
+    try {
+      if (env.DB) {
+        const now = new Date().toISOString();
+        // Use parameterized query to avoid injection and handle types as stored in D1.
+        await env.DB.prepare('INSERT INTO prices (dollar, gold, datetime) VALUES (?, ?, ?)')
+          .bind(tetherData.value, goldData.value, now)
+          .run();
+        console.log('Inserted prices into D1:', { dollar: tetherData.value, gold: goldData.value, datetime: now });
+      } else {
+        console.log('No D1 binding found (env.DB missing). Skipping DB insert.');
+      }
+    } catch (dbErr) {
+      console.error('D1 insert error:', dbErr);
+    }
+
     if (env.CHANNEL_ID) {
       await telegram.sendMessage(env.CHANNEL_ID, message, env, undefined, { disable_web_page_preview: true, disable_notification: false, parse_mode: 'HTML' });
     } else {
