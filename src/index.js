@@ -123,12 +123,16 @@ export default {
           const imgRes1 = await fetch(urls.dollarUrl);
           if (!imgRes1.ok) throw new Error(`Failed to fetch dollar chart image: ${imgRes1.status}`);
           const buf1 = await imgRes1.arrayBuffer();
-          await telegram.uploadPhoto(env.CHANNEL_ID, buf1, 'dollar.png', 'Dollar - last 24h', env, { parse_mode: 'HTML' });
 
           const imgRes2 = await fetch(urls.goldUrl);
           if (!imgRes2.ok) throw new Error(`Failed to fetch gold chart image: ${imgRes2.status}`);
           const buf2 = await imgRes2.arrayBuffer();
-          await telegram.uploadPhoto(env.CHANNEL_ID, buf2, 'gold.png', 'Gold - last 24h', env, { parse_mode: 'HTML' });
+
+          // send as media group (album)
+          await telegram.sendMediaGroup(env.CHANNEL_ID, [
+            { buffer: buf1, filename: 'dollar.png', caption: 'Dollar - last 24h' },
+            { buffer: buf2, filename: 'gold.png', caption: 'Gold - last 24h' },
+          ], env);
 
           await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
         } catch (uploadErr) {
@@ -199,17 +203,20 @@ export default {
         try {
           const urls = await generateChart(env);
           if (env.CHANNEL_ID) {
-            // Fetch PNGs from QuickChart and upload binaries to Telegram so they appear as images.
+            // Fetch PNGs from QuickChart and upload binaries to Telegram as an album.
             try {
               const imgRes1 = await fetch(urls.dollarUrl);
               if (!imgRes1.ok) throw new Error(`Failed to fetch dollar chart image: ${imgRes1.status}`);
               const buf1 = await imgRes1.arrayBuffer();
-              await telegram.uploadPhoto(env.CHANNEL_ID, buf1, 'dollar.png', 'تغییرات دلار در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
 
               const imgRes2 = await fetch(urls.goldUrl);
               if (!imgRes2.ok) throw new Error(`Failed to fetch gold chart image: ${imgRes2.status}`);
               const buf2 = await imgRes2.arrayBuffer();
-              await telegram.uploadPhoto(env.CHANNEL_ID, buf2, 'gold.png', 'تغییرات طلا در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
+
+              await telegram.sendMediaGroup(env.CHANNEL_ID, [
+                { buffer: buf1, filename: 'dollar.png', caption: 'تغییرات دلار در 24 ساعت گذشته' },
+                { buffer: buf2, filename: 'gold.png', caption: 'تغییرات طلا در 24 ساعت گذشته' },
+              ], env);
             } catch (uploadErr) {
               console.error('Failed to fetch/upload chart images:', uploadErr);
               try { await notify('warn', 'Failed to fetch/upload chart images', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }

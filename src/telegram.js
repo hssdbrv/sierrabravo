@@ -157,3 +157,45 @@ async function uploadPhoto(chatId, imageData, filename, caption, env, options = 
 // Final export with all helpers
 const telegramApi = { sendMessage, editMessage, sendPhoto, uploadPhoto };
 export default telegramApi;
+
+/**
+ * Send multiple photos as an album (media group).
+ * @param {string|number} chatId
+ * @param {Array<{buffer: ArrayBuffer|Uint8Array|Blob, filename?: string, caption?: string}>} images
+ * @param {object} env
+ */
+async function sendMediaGroup(chatId, images, env) {
+  const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMediaGroup`;
+
+  const form = new FormData();
+  form.append('chat_id', String(chatId));
+
+  const media = [];
+  for (let i = 0; i < images.length; i++) {
+    const item = images[i];
+    const name = `file${i}`;
+    media.push({ type: 'photo', media: `attach://${name}`, caption: item.caption || undefined });
+
+    let buffer;
+    if (item.buffer instanceof ArrayBuffer) buffer = item.buffer;
+    else if (ArrayBuffer.isView(item.buffer)) buffer = item.buffer.buffer;
+    else if (item.buffer instanceof Blob) buffer = await item.buffer.arrayBuffer();
+    else buffer = item.buffer.buffer || item.buffer;
+
+    const blob = new Blob([buffer], { type: 'image/png' });
+    form.append(name, blob, item.filename || `${name}.png`);
+  }
+
+  form.append('media', JSON.stringify(media));
+
+  const res = await fetch(url, { method: 'POST', body: form });
+  const data = await res.json().catch((e) => { throw new Error(`Telegram response parse error: ${e.message}`); });
+  if (!res.ok || data.ok === false) {
+    const errMsg = data && data.description ? data.description : `HTTP ${res.status}`;
+    throw new Error(`Telegram API error: ${errMsg}`);
+  }
+  return data;
+}
+
+// expose sendMediaGroup
+telegramApi.sendMediaGroup = sendMediaGroup;
