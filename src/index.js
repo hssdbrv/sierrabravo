@@ -115,15 +115,27 @@ export default {
     if (url.pathname === '/__send_chart') {
       if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
       try {
-        const imageUrl = await generateChart(env);
+        const urls = await generateChart(env);
         if (!env.CHANNEL_ID) return new Response('CHANNEL_ID not configured', { status: 500 });
 
-        // Fetch the PNG and upload it to Telegram so it appears inline
-        const imgRes = await fetch(imageUrl);
-        if (!imgRes.ok) throw new Error(`Failed to fetch chart image: ${imgRes.status}`);
-        const arrayBuffer = await imgRes.arrayBuffer();
-        await telegram.uploadPhoto(env.CHANNEL_ID, arrayBuffer, 'prices.png', '', env, { parse_mode: 'HTML' });
-        await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
+        // Fetch each PNG and upload it to Telegram so they appear inline
+        try {
+          const imgRes1 = await fetch(urls.dollarUrl);
+          if (!imgRes1.ok) throw new Error(`Failed to fetch dollar chart image: ${imgRes1.status}`);
+          const buf1 = await imgRes1.arrayBuffer();
+          await telegram.uploadPhoto(env.CHANNEL_ID, buf1, 'dollar.png', 'Dollar - last 24h', env, { parse_mode: 'HTML' });
+
+          const imgRes2 = await fetch(urls.goldUrl);
+          if (!imgRes2.ok) throw new Error(`Failed to fetch gold chart image: ${imgRes2.status}`);
+          const buf2 = await imgRes2.arrayBuffer();
+          await telegram.uploadPhoto(env.CHANNEL_ID, buf2, 'gold.png', 'Gold - last 24h', env, { parse_mode: 'HTML' });
+
+          await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
+        } catch (uploadErr) {
+          console.error('Manual send chart upload error:', uploadErr);
+          try { await notify('error', 'Manual send chart upload error', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
+          return new Response('Error: ' + (uploadErr.message || String(uploadErr)), { status: 500 });
+        }
         return new Response('Chart generated and sent', { status: 200 });
       } catch (e) {
         console.error('Manual send chart error:', e);
@@ -185,20 +197,25 @@ export default {
       const now = new Date();
       if (now.getUTCHours() === 0) {
         try {
-          const imageUrl = await generateChart(env);
+          const urls = await generateChart(env);
           if (env.CHANNEL_ID) {
-            // Fetch PNG from QuickChart and upload binary to Telegram so it appears as an image.
+            // Fetch PNGs from QuickChart and upload binaries to Telegram so they appear as images.
             try {
-              const imgRes = await fetch(imageUrl);
-              if (!imgRes.ok) throw new Error(`Failed to fetch chart image: ${imgRes.status}`);
-              const arrayBuffer = await imgRes.arrayBuffer();
-              await telegram.uploadPhoto(env.CHANNEL_ID, arrayBuffer, 'prices.png', 'تغییرات بازار در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
+              const imgRes1 = await fetch(urls.dollarUrl);
+              if (!imgRes1.ok) throw new Error(`Failed to fetch dollar chart image: ${imgRes1.status}`);
+              const buf1 = await imgRes1.arrayBuffer();
+              await telegram.uploadPhoto(env.CHANNEL_ID, buf1, 'dollar.png', 'تغییرات دلار در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
+
+              const imgRes2 = await fetch(urls.goldUrl);
+              if (!imgRes2.ok) throw new Error(`Failed to fetch gold chart image: ${imgRes2.status}`);
+              const buf2 = await imgRes2.arrayBuffer();
+              await telegram.uploadPhoto(env.CHANNEL_ID, buf2, 'gold.png', 'تغییرات طلا در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
             } catch (uploadErr) {
-              console.error('Failed to fetch/upload chart image:', uploadErr);
-              try { await notify('warn', 'Failed to fetch/upload chart image', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
+              console.error('Failed to fetch/upload chart images:', uploadErr);
+              try { await notify('warn', 'Failed to fetch/upload chart images', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
             }
           } else {
-            console.log('Generated chart URL (no CHANNEL_ID):', imageUrl);
+            console.log('Generated chart URLs (no CHANNEL_ID):', urls);
           }
         } catch (chartErr) {
           console.error('Chart generation/send error:', chartErr);

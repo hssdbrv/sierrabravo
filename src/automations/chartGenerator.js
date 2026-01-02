@@ -41,44 +41,28 @@ export default async function generateChart(env) {
     throw new Error('No valid numeric price rows for last 24 hours');
   }
 
-  // Build Chart.js config
-  const config = {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Dollar',
-          data: dollarValues,
-          borderColor: 'rgba(54, 235, 57, 1)',
-          backgroundColor: 'rgba(54,162,235,0.2)',
-          fill: false,
-        },
-        {
-          label: 'Gold',
-          data: goldValues,
-          borderColor: 'rgba(255, 239, 99, 1)',
-          backgroundColor: 'rgba(255,99,132,0.2)',
-          fill: false,
-        },
-      ],
-    },
-    options: {
-      title: { display: true, text: 'Prices - Last 24 hours' },
-      scales: {
-        xAxes: [{ type: 'time', time: { tooltipFormat: 'YYYY-MM-DD HH:mm', displayFormats: { hour: 'HH:mm' } } }],
-        yAxes: [{ ticks: { beginAtZero: false } }],
+  // Build separate Chart.js configs for dollar and gold
+  const base = 'https://quickchart.io/chart';
+
+  const makeUrl = (datasetLabel, dataValues, borderColor, bgColor, title) => {
+    const cfg = {
+      type: 'line',
+      data: { labels, datasets: [{ label: datasetLabel, data: dataValues, borderColor, backgroundColor: bgColor, fill: false }] },
+      options: {
+        title: { display: true, text: title },
+        scales: { xAxes: [{ type: 'time', time: { tooltipFormat: 'YYYY-MM-DD HH:mm', displayFormats: { hour: 'HH:mm' } } }], yAxes: [{ ticks: { beginAtZero: false } }] },
       },
-    },
+    };
+    const params = new URLSearchParams();
+    params.set('c', JSON.stringify(cfg));
+    params.set('format', 'png');
+    params.set('width', '1000');
+    params.set('height', '520');
+    return `${base}?${params.toString()}`;
   };
 
-  // QuickChart endpoint - return a PNG URL with encoded config
-  const base = 'https://quickchart.io/chart';
-  const params = new URLSearchParams();
-  params.set('c', JSON.stringify(config));
-  params.set('format', 'png');
-  params.set('width', '1000');
-  params.set('height', '520');
+  const dollarUrl = makeUrl('Dollar', dollarValues, 'rgba(54,162,235,1)', 'rgba(54,162,235,0.2)', 'Dollar - Last 24 hours');
+  const goldUrl = makeUrl('Gold', goldValues, 'rgba(255,99,132,1)', 'rgba(255,99,132,0.2)', 'Gold - Last 24 hours');
 
-  return `${base}?${params.toString()}`;
+  return { dollarUrl, goldUrl };
 }
