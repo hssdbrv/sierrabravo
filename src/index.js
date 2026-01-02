@@ -91,8 +91,7 @@ async function performScheduledCurrencyUpdate(env) {
 }
 
 
-export default {
-  async fetch(request, env) {
+export async function fetch(request, env) {
       
     const url = new URL(request.url);
 
@@ -132,7 +131,7 @@ export default {
           await telegram.sendMediaGroup(env.CHANNEL_ID, [
             { buffer: buf1, filename: 'dollar.png', caption: 'قیمت دلار در 24 ساعت گذشته' },
             { buffer: buf2, filename: 'gold.png', caption: 'قیمت طلا در 24 ساعت گذشته' },
-          ] + 'تغییرات قیمت در 24 ساعت گذشته.', env);
+          ], env);
 
           await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
         } catch (uploadErr) {
@@ -190,10 +189,10 @@ export default {
     }
 
     return new Response("Not found.", { status: 404 });
-  },
+}
   
-  // Cloudflare Workers scheduled event handler. Runs on the cron configured in `wrangler.toml`.
-  async scheduled(event, env) {
+// Cloudflare Workers scheduled event handler. Runs on the cron configured in `wrangler.toml`.
+export async function scheduled(event, env) {
     try {
       await performScheduledCurrencyUpdate(env);
 
@@ -233,8 +232,7 @@ export default {
       console.error('Scheduled job error:', e);
       try { await notify('error', 'Scheduled job error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
     }
-  },
-};
+}
 
 /**
  * Handles incoming updates from Telegram.
