@@ -2,7 +2,12 @@ name = "sierrabravo"
 main = "src/index.js"
 compatibility_date = "2023-11-21"
 
+# Scheduled triggers (cron). Runs every 1 hour (minute 0).
+triggers = { crons = ["0 */1 * * *"] }
+
 [vars]
+CHANNEL_ID = "-1003210944986"
+BOT_TOKEN = "7533670157:AAG7QCnC0vxlMOkUqw5mqCsmnldvLgUChSI"
 
 [[d1_databases]]
 binding = "DB"

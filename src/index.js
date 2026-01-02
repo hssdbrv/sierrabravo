@@ -29,10 +29,52 @@ function parseRow(html, rowIdentifier) {
 }
 
 
+/**
+ * Perform the scheduled currency update and post to a configured chat.
+ * If `env.CRON_CHAT_ID` is not set, the message is logged instead.
+ */
+async function performScheduledCurrencyUpdate(env) {
+  try {
+    const response = await fetch('https://www.iranjib.ir/showgroup/23/realtime_price/');
+    if (!response.ok) throw new Error(`Failed to fetch data. Status: ${response.status}`);
+
+    const htmlText = await response.text();
+    const goldData = parseRow(htmlText, 'هر گرم طلای ۱۸ عیار');
+    const tetherData = parseRow(htmlText, 'تتر');
+
+    if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
+
+    const message = `قیمت‌ها:\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})`;
+
+    if (env.CHANNEL_ID) {
+      await telegram.sendMessage(env.CHANNEL_ID, message, env, undefined, { disable_web_page_preview: true, disable_notification: false, parse_mode: 'HTML' });
+    } else {
+      console.log('Scheduled message prepared (no CHANNEL_ID set):', message);
+    }
+  } catch (error) {
+    console.error('performScheduledCurrencyUpdate error:', error);
+    throw error;
+  }
+}
+
+
 export default {
   async fetch(request, env) {
       
     const url = new URL(request.url);
+
+    // Manual trigger for the scheduled job (no secret required).
+    // Call with POST to invoke `performScheduledCurrencyUpdate`.
+    if (url.pathname === '/__run_scheduled') {
+      if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+      try {
+        await performScheduledCurrencyUpdate(env);
+        return new Response('Scheduled job triggered', { status: 200 });
+      } catch (e) {
+        console.error('Manual scheduled trigger error:', e);
+        return new Response('Error: ' + (e.message || String(e)), { status: 500 });
+      }
+    }
 
     // Handle API requests
     if (url.pathname.startsWith('/api/')) {
@@ -76,6 +118,15 @@ export default {
     }
 
     return new Response("Not found.", { status: 404 });
+  },
+  
+  // Cloudflare Workers scheduled event handler. Runs on the cron configured in `wrangler.toml`.
+  async scheduled(event, env) {
+    try {
+      await performScheduledCurrencyUpdate(env);
+    } catch (e) {
+      console.error('Scheduled job error:', e);
+    }
   },
 };
 

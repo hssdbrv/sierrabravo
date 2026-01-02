@@ -8,27 +8,39 @@
  * @param {number | undefined} threadId The ID of the message thread (for topics).
  * @returns {Promise<object>} The response from the Telegram API.
  */
-async function sendMessage(chatId, text, env, threadId, replyMarkup) {
+async function sendMessage(chatId, text, env, threadId, options = {}) {
   const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`;
-  
+
   const payload = {
     chat_id: chatId,
     text: text,
-    parse_mode: 'Markdown'
+    parse_mode: options.parse_mode || 'HTML',
   };
 
-  if (threadId) {
-    payload.message_thread_id = threadId;
-  }
+  if (threadId) payload.message_thread_id = threadId;
+  if (options.disable_web_page_preview !== undefined) payload.disable_web_page_preview = options.disable_web_page_preview;
+  if (options.disable_notification !== undefined) payload.disable_notification = options.disable_notification;
+  if (options.reply_markup) payload.reply_markup = options.reply_markup;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  return response.json();
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error(`Telegram response parse error: ${e.message}`);
+  }
+
+  if (!res.ok || data.ok === false) {
+    const errMsg = data && data.description ? data.description : `HTTP ${res.status}`;
+    throw new Error(`Telegram API error: ${errMsg}`);
+  }
+
+  return data;
 }
 
 /**
@@ -49,7 +61,7 @@ async function editMessage(chatId, messageId, text, env) {
       chat_id: chatId,
       message_id: messageId,
       text: text,
-      parse_mode: 'Markdown' // Also enable Markdown here
+      parse_mode: 'HTML'
     }),
   });
 }
