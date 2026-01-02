@@ -60,9 +60,14 @@ async function performScheduledCurrencyUpdate(env) {
           console.error('D1 create table error (ignoring):', createErr);
           try { await notify('warn', 'D1 create table error (ignored)', String(createErr), env); } catch(e){ console.error('notify failed', e); }
         }
+        // Normalize numeric values before inserting
+        const { parseNumber } = await import('./utils/number.js');
+        const dollarNum = parseNumber(tetherData.value);
+        const goldNum = parseNumber(goldData.value);
+
         // Use parameterized query to avoid injection and handle types as stored in D1.
         await env.DB.prepare('INSERT INTO prices (dollar, gold, datetime) VALUES (?, ?, ?)')
-          .bind(tetherData.value, goldData.value, now)
+          .bind(dollarNum, goldNum, now)
           .run();
         console.log('Inserted prices into D1:', { dollar: tetherData.value, gold: goldData.value, datetime: now });
       } else {

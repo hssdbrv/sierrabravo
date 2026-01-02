@@ -24,12 +24,21 @@ export default async function generateChart(env) {
   const dollarValues = [];
   const goldValues = [];
 
+  const { parseNumber } = await import('../utils/number.js');
   for (const row of results) {
     // Expect datetime stored as ISO string
-    labels.push(new Date(row.datetime).toISOString().replace('T', ' ').replace('Z', ''));
-    // Use numeric values if stored as numbers, otherwise try to parse
-    dollarValues.push(Number(row.dollar));
-    goldValues.push(Number(row.gold));
+    const dt = new Date(row.datetime);
+    if (Number.isNaN(dt.getTime())) continue; // skip invalid dates
+    const dnum = parseNumber(row.dollar);
+    const gnum = parseNumber(row.gold);
+    if (!Number.isFinite(dnum) || !Number.isFinite(gnum)) continue; // skip rows with invalid numbers
+    labels.push(dt.toISOString().replace('T', ' ').replace('Z', ''));
+    dollarValues.push(dnum);
+    goldValues.push(gnum);
+  }
+
+  if (dollarValues.length === 0 || goldValues.length === 0) {
+    throw new Error('No valid numeric price rows for last 24 hours');
   }
 
   // Build Chart.js config
