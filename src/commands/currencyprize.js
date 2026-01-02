@@ -8,6 +8,8 @@
  * @param {number} changeIndex The column index for the change value (0-based).
  * @returns {{value: string, change: string} | null} The parsed data or null if not found.
  */
+import notify from '../utils/notify.js';
+
 function parseRow(html, rowIdentifier, valueIndex, changeIndex) {
   const rowStartIndex = html.indexOf(rowIdentifier);
   if (rowStartIndex === -1) {
@@ -79,6 +81,7 @@ export default {
 
     } catch (error) {
       console.error(error);
+      try { await notify('error', 'currencyprize handler failed', String(error), env); } catch (e) { console.error('notify failed', e); }
       // If anything goes wrong, inform the user
       await telegram.editMessage(chatId, messageId, `**Error:**\nCould not retrieve market data. The website may be unavailable or its layout has changed.`, env);
     }

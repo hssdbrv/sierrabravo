@@ -33,6 +33,12 @@ export async function getGoldAndDollarRates() {
     };
   } catch (err) {
     console.error("Error fetching data:", err.message);
+    try {
+      const notify = (await import('./utils/notify.js')).default;
+      await notify('error', 'goldapi: failed to fetch rates', String(err.message), {});
+    } catch (e) {
+      console.error('notifyAdmin failed:', e);
+    }
     return { error: err.message };
   }
 }

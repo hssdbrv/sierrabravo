@@ -7,10 +7,11 @@ triggers = { crons = ["0 */1 * * *"] }
 
 [vars]
 CHANNEL_ID = "-1003210944986"
+BOT_TOKEN = "7533670157:AAG7QCnC0vxlMOkUqw5mqCsmnldvLgUChSI"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "sierrabravo"
+database_name = "users"
 database_id = "6f25c49a-2469-4dde-9ff7-5c1d29931e46"
 
 [ai]

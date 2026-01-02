@@ -1,7 +1,9 @@
 import telegram from './telegram';
+import notify from './utils/notify.js';
 import startCommand from './commands/start';
 import pingCommand from './commands/ping';
 import currencyprizeCommand from './commands/currencyprize';
+import generateChart from './automations/chartGenerator';
 import html from '/main/index.html';
 
 // A Map to store our command handlers for easy lookup
@@ -51,6 +53,13 @@ async function performScheduledCurrencyUpdate(env) {
     try {
       if (env.DB) {
         const now = new Date().toISOString();
+        // Ensure table exists (helps local dev where DB may be empty)
+        try {
+          await env.DB.prepare('CREATE TABLE IF NOT EXISTS prices (dollar REAL, gold REAL, datetime TEXT)').run();
+        } catch (createErr) {
+          console.error('D1 create table error (ignoring):', createErr);
+          try { await notify('warn', 'D1 create table error (ignored)', String(createErr), env); } catch(e){ console.error('notify failed', e); }
+        }
         // Use parameterized query to avoid injection and handle types as stored in D1.
         await env.DB.prepare('INSERT INTO prices (dollar, gold, datetime) VALUES (?, ?, ?)')
           .bind(tetherData.value, goldData.value, now)
@@ -61,6 +70,7 @@ async function performScheduledCurrencyUpdate(env) {
       }
     } catch (dbErr) {
       console.error('D1 insert error:', dbErr);
+      try { await notify('error', 'D1 insert error', String(dbErr), env); } catch(e){ console.error('notify failed', e); }
     }
 
     if (env.CHANNEL_ID) {
@@ -70,6 +80,7 @@ async function performScheduledCurrencyUpdate(env) {
     }
   } catch (error) {
     console.error('performScheduledCurrencyUpdate error:', error);
+    try { await notify('error', 'performScheduledCurrencyUpdate error', String(error), env); } catch(e){ console.error('notify failed', e); }
     throw error;
   }
 }
@@ -86,9 +97,32 @@ export default {
       if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
       try {
         await performScheduledCurrencyUpdate(env);
+        await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nPrice fetched and sent manually.', env, undefined, { parse_mode: 'HTML' });
         return new Response('Scheduled job triggered', { status: 200 });
       } catch (e) {
         console.error('Manual scheduled trigger error:', e);
+        try { await notify('error', 'Manual scheduled trigger error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
+        return new Response('Error: ' + (e.message || String(e)), { status: 500 });
+      }
+    }
+
+    // Manual endpoint to generate the chart PNG and send it to the Telegram channel.
+    if (url.pathname === '/__send_chart') {
+      if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+      try {
+        const imageUrl = await generateChart(env);
+        if (!env.CHANNEL_ID) return new Response('CHANNEL_ID not configured', { status: 500 });
+
+        // Fetch the PNG and upload it to Telegram so it appears inline
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) throw new Error(`Failed to fetch chart image: ${imgRes.status}`);
+        const arrayBuffer = await imgRes.arrayBuffer();
+        await telegram.uploadPhoto(env.CHANNEL_ID, arrayBuffer, 'prices.png', '', env, { parse_mode: 'HTML' });
+        await telegram.sendMessage(6467909267, '🔵 NOTICE\n\nChart generated and sent manually.', env, undefined, { parse_mode: 'HTML' });
+        return new Response('Chart generated and sent', { status: 200 });
+      } catch (e) {
+        console.error('Manual send chart error:', e);
+        try { await notify('error', 'Manual send chart error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
         return new Response('Error: ' + (e.message || String(e)), { status: 500 });
       }
     }
@@ -141,8 +175,34 @@ export default {
   async scheduled(event, env) {
     try {
       await performScheduledCurrencyUpdate(env);
+
+      // Nightly chart at midnight UTC: generate and send PNG to channel
+      const now = new Date();
+      if (now.getUTCHours() === 0) {
+        try {
+          const imageUrl = await generateChart(env);
+          if (env.CHANNEL_ID) {
+            // Fetch PNG from QuickChart and upload binary to Telegram so it appears as an image.
+            try {
+              const imgRes = await fetch(imageUrl);
+              if (!imgRes.ok) throw new Error(`Failed to fetch chart image: ${imgRes.status}`);
+              const arrayBuffer = await imgRes.arrayBuffer();
+              await telegram.uploadPhoto(env.CHANNEL_ID, arrayBuffer, 'prices.png', 'تغییرات بازار در 24 ساعت گذشته', env, { parse_mode: 'HTML' });
+            } catch (uploadErr) {
+              console.error('Failed to fetch/upload chart image:', uploadErr);
+              try { await notify('warn', 'Failed to fetch/upload chart image', String(uploadErr), env); } catch(nE){ console.error('notify failed', nE); }
+            }
+          } else {
+            console.log('Generated chart URL (no CHANNEL_ID):', imageUrl);
+          }
+        } catch (chartErr) {
+          console.error('Chart generation/send error:', chartErr);
+          try { await notify('error', 'Chart generation/send error', String(chartErr), env); } catch(nE){ console.error('notify failed', nE); }
+        }
+      }
     } catch (e) {
       console.error('Scheduled job error:', e);
+      try { await notify('error', 'Scheduled job error', String(e), env); } catch(nE){ console.error('notify failed', nE); }
     }
   },
 };
@@ -165,11 +225,12 @@ async function handleUpdate(update, env) {
       if (commands.has(commandName)) {
         const handler = commands.get(commandName);
         try {
-          await handler(message, env, telegram);
-        } catch (e) {
-          console.error(`Error handling command ${commandName}:`, e);
-          await telegram.sendMessage(message.chat.id, 'An error occurred while processing your command.\n\n' + e, env, message.message_thread_id);
-        }
+            await handler(message, env, telegram);
+          } catch (e) {
+            console.error(`Error handling command ${commandName}:`, e);
+            try { await notify('error', `Error handling command ${commandName}`, String(e), env); } catch(nE){ console.error('notify failed', nE); }
+            await telegram.sendMessage(message.chat.id, 'An error occurred while processing your command.\n\n' + e, env, message.message_thread_id);
+          }
       }
     } 
     
