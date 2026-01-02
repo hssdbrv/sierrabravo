@@ -2,6 +2,7 @@
   "name": "sierrabravo",
   "version": "1.0.0",
   "description": "A Telegram bot hosted on Cloudflare Workers.",
+  "type": "module",
   "main": "src/index.js",
   "scripts": {
     "dev": "wrangler dev",
