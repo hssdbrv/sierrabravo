@@ -101,8 +101,8 @@
       <p>Select an option...</p>
       <div class="button-container">
         <button id="show-currency-btn" class="btn">Currency Prize</button>
+        <button id="show-services-btn" class="btn">Show Services</button>
       </div>
-      <p>This bot is under development...</p>
     </div>
 
     <div id="currency-page" class="page-content hidden">
@@ -127,6 +127,10 @@
       </div>
     </div>
 
+    <div id="services-page" class="page-content hidden">
+      <button id="arzesh-btn" class="btn">Arzesh</button>
+    </div>
+
   </main>
 
   <script>
@@ -135,11 +139,13 @@
     const pages = {
       main: document.getElementById('main-page'),
       currency: document.getElementById('currency-page'),
+      services: document.getElementById('services-page')
       // REMOVED: There is no element with id 'info-page' in the HTML.
       // info: document.getElementById('info-page'), 
     };
     const buttons = {
       showCurrency: document.getElementById('show-currency-btn'),
+      showServices: document.getElementById('show-services-btn')
       // REMOVED: There is no element with id 'show-info-btn' in the HTML.
       // showInfo: document.getElementById('show-info-btn'), 
     };
@@ -222,9 +228,17 @@
         }
     }
 
+    async function showServicesPage() {
+      showPage('services-page', 'Services');
+    }
+
     // --- Event Listeners ---
     if (buttons.showCurrency) {
       buttons.showCurrency.addEventListener('click', fetchCurrencyData);
+    }
+
+    if (buttons.showServices) {
+      buttons.showServices.addEventListener('click', showServicesPage)
     }
     
     // REMOVED: This would cause an error because buttons.showInfo does not exist.
