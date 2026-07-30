@@ -5,6 +5,9 @@ import pingCommand from './commands/ping';
 import currencyprizeCommand from './commands/currencyprize';
 import generateChart from './automations/chartGenerator';
 import html from '/main/index.html';
+import { getGold18kFromTether } from './goldapi.js';
+import { parseNumber, toEnglishDigits } from './utils/number.js';
+import { getLatestStoredPrice, insertPriceRow, computeChange, formatChange } from './utils/priceHistory.js';
 
 // A Map to store our command handlers for easy lookup
 const commands = new Map();
@@ -37,12 +40,34 @@ async function performScheduledCurrencyUpdate(env) {
     if (!response.ok) throw new Error(`Failed to fetch data. Status: ${response.status}`);
 
     const htmlText = await response.text();
-    const goldData = parseRow(htmlText, 'هر گرم طلای ۱۸ عیار');
+    // Tether/USD row is still scraped from iranjib, unchanged.
     const tetherData = parseRow(htmlText, 'تتر');
 
-    if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
+    if (!tetherData) throw new Error('Could not parse Tether data.');
 
-    const message = `قیمت‌ها:\n\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})\n\n#قیمت #طلا #دلار`;
+    // 18k gold price is now calculated from gold-api.com spot + the Tether
+    // rate above, instead of being scraped as its own row from iranjib.
+    const tetherPriceToman = parseNumber(tetherData.value);
+    const goldCalc = await getGold18kFromTether(tetherPriceToman, env);
+    if (goldCalc.error) throw new Error(`Could not calculate gold price: ${goldCalc.error}`);
+
+    const goldPriceToman = Math.round(goldCalc.pricePerGramToman_18k);
+
+    // Look up the previously stored price (before we insert the new one) to
+    // compute a recent price change for both gold and Tether, using the same
+    // D1 `prices` table chartGenerator.js already reads from.
+    const previous = await getLatestStoredPrice(env).catch((e) => {
+      console.error('getLatestStoredPrice failed:', e);
+      return null;
+    });
+    const goldChange = previous ? computeChange(goldPriceToman, previous.gold) : null;
+    const dollarChange = previous ? computeChange(tetherPriceToman, previous.dollar) : null;
+
+    // Fall back to iranjib's own Tether change text (digits normalized to
+    // ASCII) if there's no history yet, e.g. on the very first run.
+    const dollarChangeText = dollarChange ? formatChange(dollarChange) : toEnglishDigits(tetherData.change);
+
+    const message = `قیمت‌ها:\n\nطلای ۱۸ عیار (محاسبه‌شده): ${goldPriceToman.toLocaleString()} تومان (${formatChange(goldChange)})\nتتر: ${tetherPriceToman.toLocaleString()} تومان (${dollarChangeText})\n\n#قیمت #طلا #دلار`;
 
     // Insert values into D1 `prices` table if binding available.
     // We store the raw values (without the 'change') and an ISO datetime.
@@ -56,16 +81,10 @@ async function performScheduledCurrencyUpdate(env) {
           console.error('D1 create table error (ignoring):', createErr);
           try { await notify('warn', 'D1 create table error (ignored)', String(createErr), env); } catch (e) { console.error('notify failed', e); }
         }
-        // Normalize numeric values before inserting
-        const { parseNumber } = await import('./utils/number.js');
-        const dollarNum = parseNumber(tetherData.value);
-        const goldNum = parseNumber(goldData.value);
 
         // Use parameterized query to avoid injection and handle types as stored in D1.
-        await env.DB.prepare('INSERT INTO prices (dollar, gold, datetime) VALUES (?, ?, ?)')
-          .bind(dollarNum, goldNum, now)
-          .run();
-        console.log('Inserted prices into D1:', { dollar: tetherData.value, gold: goldData.value, datetime: now });
+        await insertPriceRow(env, tetherPriceToman, goldPriceToman, now);
+        console.log('Inserted prices into D1:', { dollar: tetherPriceToman, gold: goldPriceToman, datetime: now });
       } else {
         console.log('No D1 binding found (env.DB missing). Skipping DB insert.');
       }
@@ -154,12 +173,41 @@ export default {
           if (!response.ok) throw new Error(`Failed to fetch data. Status: ${response.status}`);
 
           const htmlText = await response.text();
-          const goldData = parseRow(htmlText, 'هر گرم طلای ۱۸ عیار');
+          // Tether/USD row is still scraped from iranjib, unchanged.
           const tetherData = parseRow(htmlText, 'تتر');
 
-          if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
+          if (!tetherData) throw new Error('Could not parse Tether data.');
 
-          const data = { gold: goldData, tether: tetherData };
+          // 18k gold price is calculated from gold-api.com spot + the Tether
+          // rate above, instead of being scraped as its own row from iranjib.
+          const tetherPriceToman = parseNumber(tetherData.value);
+          const goldCalc = await getGold18kFromTether(tetherPriceToman, env);
+          if (goldCalc.error) throw new Error(`Could not calculate gold price: ${goldCalc.error}`);
+
+          const goldPriceToman = Math.round(goldCalc.pricePerGramToman_18k);
+
+          const previous = await getLatestStoredPrice(env).catch((e) => {
+            console.error('getLatestStoredPrice failed:', e);
+            return null;
+          });
+          const goldChange = previous ? computeChange(goldPriceToman, previous.gold) : null;
+          const dollarChange = previous ? computeChange(tetherPriceToman, previous.dollar) : null;
+
+          const data = {
+            gold: {
+              value: goldPriceToman,
+              unit: 'Toman',
+              change: goldChange,
+              calculated: true,
+              usdPerOunce: goldCalc.usdPerOunce,
+            },
+            tether: {
+              value: tetherPriceToman,
+              unit: 'Toman',
+              change: dollarChange,
+              rawChange: toEnglishDigits(tetherData.change),
+            },
+          };
 
           return new Response(JSON.stringify(data), {
             headers: { 'Content-Type': 'application/json' },

@@ -7,6 +7,10 @@
 const GOLD_API_URL = 'https://api.gold-api.com/price/XAU';
 const GRAMS_PER_OUNCE = 31.1035;
 
+/**
+ * Fetch the current gold spot price in USD per troy ounce.
+ * @returns {Promise<number>}
+ */
 export async function fetchGoldOunceUSD() {
   const res = await fetch(GOLD_API_URL);
   if (!res.ok) throw new Error(`Failed to fetch gold price. Status: ${res.status}`);
@@ -16,6 +20,12 @@ export async function fetchGoldOunceUSD() {
   return usdPerOunce;
 }
 
+/**
+ * Calculate 18k gram gold price given a USD/ounce spot price and a
+ * Tether/Toman rate (how many Toman one USD/USDT currently costs).
+ * @param {number} usdPerOunce
+ * @param {number} tetherPriceToman
+ */
 export function calculateGold18k(usdPerOunce, tetherPriceToman) {
   const pricePerGramUSD_24k = usdPerOunce / GRAMS_PER_OUNCE;
   const pricePerGramUSD_18k = pricePerGramUSD_24k * 0.75;
@@ -30,6 +40,13 @@ export function calculateGold18k(usdPerOunce, tetherPriceToman) {
   };
 }
 
+/**
+ * Convenience wrapper: fetches the current gold spot price and calculates
+ * the 18k gram price, given an already-known Tether/Toman rate (e.g. scraped
+ * from iranjib).
+ * @param {number} tetherPriceToman
+ * @param {object} env Worker env, used only for admin error notifications.
+ */
 export async function getGold18kFromTether(tetherPriceToman, env = {}) {
   try {
     if (!Number.isFinite(tetherPriceToman) || tetherPriceToman <= 0) {
