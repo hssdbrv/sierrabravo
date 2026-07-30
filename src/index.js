@@ -125,6 +125,20 @@ export default {
       }
     }
 
+    // One-time (or whenever the URL changes) setup call to configure the
+    // persistent "Open App" menu button in Telegram, pointing at env.WEBAPP_URL.
+    if (url.pathname === '/__setup_menu_button') {
+      if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+      try {
+        await telegram.setChatMenuButton(env);
+        return new Response('Menu button configured', { status: 200 });
+      } catch (e) {
+        console.error('Menu button setup error:', e);
+        try { await notify('error', 'Menu button setup error', String(e), env); } catch (nE) { console.error('notify failed', nE); }
+        return new Response('Error: ' + (e.message || String(e)), { status: 500 });
+      }
+    }
+
     // Manual endpoint to generate the chart PNG and send it to the Telegram channel.
     if (url.pathname === '/__send_chart') {
       if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });

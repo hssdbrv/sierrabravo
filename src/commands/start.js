@@ -25,8 +25,14 @@ export default {
     }
 
     const welcomeMessage = `This is SierraBravo.\n\n/ping - Check if the bot is alive\n/currencyprize - Get Real-time price of currencies`;
-    
-    await telegram.sendMessage(chatId, welcomeMessage, env, threadId);  
+
+    // Offer a direct "Open App" button that launches the Mini App, in
+    // addition to whatever the persistent chat menu button is set to.
+    const replyMarkup = env.WEBAPP_URL
+      ? { inline_keyboard: [[{ text: '📱 Open App', web_app: { url: env.WEBAPP_URL } }]] }
+      : undefined;
+
+    await telegram.sendMessage(chatId, welcomeMessage, env, threadId, { reply_markup: replyMarkup });
     console.log(`start command executed`);
   },
 };

@@ -2,17 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SierraBravo Bot</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
+      /* Fallback palette (used when opened as a plain webpage, outside Telegram) */
       --bg-color: #121212;
       --surface-color: #1e1e1e;
       --primary-text: #e0e0e0;
       --secondary-text: #a0a0a0;
       --border-color: #333;
-      --accent-color: #39d353; /* Changed from orange to light green */
+      --accent-color: #39d353;
+      --btn-text-color: #121212;
     }
+    * { box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       margin: 0;
@@ -21,22 +25,24 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      /* Respect safe areas on notch/rounded-corner devices inside Telegram */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 1rem 1.5rem; /* Adjusted padding */
+      padding: 1rem 1.5rem;
       background-color: var(--surface-color);
       border-bottom: 1px solid var(--border-color);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-      min-height: 36px; /* Ensure consistent header height */
+      min-height: 36px;
     }
     .bot-name, .page-title { font-size: 1.25rem; font-weight: bold; }
     .status-indicator { display: flex; align-items: center; gap: 0.5rem; }
     .status-dot { width: 12px; height: 12px; background-color: #28a745; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); } }
-    
+
     main {
       flex-grow: 1;
       padding: 2rem;
@@ -44,38 +50,24 @@
     }
     .hidden { display: none !important; }
 
-    /* Page Content Styling */
     .page-content { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
-    .page-content h1 { font-size: 2.5rem; color: var(--primary-text); margin: 0; text-align: center;}
+    .page-content h1 { font-size: 2.5rem; color: var(--primary-text); margin: 0; text-align: center; }
     .page-content p { color: var(--secondary-text); text-align: center; }
     .button-container { display: flex; flex-direction: column; gap: 1rem; width: 100%; max-width: 300px; margin-top: 1rem; }
-    
-    /* Button Styling */
+
     .btn {
       background-color: var(--accent-color);
-      color: #121212; /* Dark text for better contrast on green */
+      color: var(--btn-text-color);
       border: none;
       padding: 1rem;
       font-size: 1rem;
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
-      transition: background-color 0.2s;
+      transition: opacity 0.15s, transform 0.1s;
     }
-    .btn:hover { background-color: #2ca541; } /* Darker green on hover */
-    
-    /* New Back Arrow Styling */
-    #back-button {
-      background: none;
-      border: none;
-      color: var(--primary-text);
-      font-size: 1.8rem;
-      cursor: pointer;
-      padding: 0;
-      line-height: 1;
-    }
+    .btn:active { opacity: 0.8; transform: scale(0.98); }
 
-    /* Info & Currency Card Styling */
     .data-card {
       background-color: var(--surface-color);
       border: 1px solid var(--border-color);
@@ -85,17 +77,18 @@
       max-width: 400px;
     }
     .data-card h2 { margin-top: 0; color: var(--accent-color); }
-    .data-card .info-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color); }
+    .data-card .info-row { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0; border-bottom: 1px solid var(--border-color); gap: 1rem; }
     .data-card .info-row:last-child { border-bottom: none; }
     .data-card .info-label { color: var(--secondary-text); }
-    .data-card .info-value { font-weight: bold; }
+    .data-card .info-value { font-weight: bold; text-align: right; }
+    .change-up { color: #39d353; }
+    .change-down { color: #e5534b; }
   </style>
 </head>
 <body>
 
-  <header id="header">
-    </header>
-  
+  <header id="header"></header>
+
   <main>
     <div id="main-page" class="page-content">
       <p>Select an option...</p>
@@ -109,7 +102,7 @@
       <div id="currency-loader">Loading market data...</div>
       <div id="currency-data-card" class="data-card hidden">
         <div class="info-row">
-          <span class="info-label">18 Karat Gold Price</span>
+          <span class="info-label">18 Karat Gold (calculated)</span>
           <span id="gold-price" class="info-value">--</span>
         </div>
         <div class="info-row">
@@ -134,23 +127,52 @@
   </main>
 
   <script>
+    // =========================================================================
+    // Telegram Mini App integration
+    // =========================================================================
+    // `Telegram.WebApp` only exists when this page is opened from inside
+    // Telegram (via a web_app button or the chat menu button). When opened as
+    // a plain browser page it's undefined, so we guard every call and fall
+    // back to the existing dark theme + custom back button in that case.
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+
+    if (tg) {
+      tg.ready();
+      tg.expand();
+
+      // Map Telegram's live theme into our CSS variables, so the app matches
+      // whatever theme (light/dark/custom) the user's Telegram client is using.
+      const applyTheme = () => {
+        const p = tg.themeParams || {};
+        const root = document.documentElement.style;
+        if (p.bg_color) root.setProperty('--bg-color', p.bg_color);
+        if (p.secondary_bg_color) root.setProperty('--surface-color', p.secondary_bg_color);
+        if (p.text_color) root.setProperty('--primary-text', p.text_color);
+        if (p.hint_color) root.setProperty('--secondary-text', p.hint_color);
+        if (p.button_color) root.setProperty('--accent-color', p.button_color);
+        if (p.button_text_color) root.setProperty('--btn-text-color', p.button_text_color);
+        document.body.style.backgroundColor = p.bg_color || '';
+      };
+      applyTheme();
+      tg.onEvent('themeChanged', applyTheme);
+    }
+
+    function haptic(style) {
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.impactOccurred(style || 'light');
+    }
+
     // --- DOM Elements ---
     const header = document.getElementById('header');
     const pages = {
       main: document.getElementById('main-page'),
       currency: document.getElementById('currency-page'),
-      services: document.getElementById('services-page')
-      // REMOVED: There is no element with id 'info-page' in the HTML.
-      // info: document.getElementById('info-page'), 
+      services: document.getElementById('services-page'),
     };
     const buttons = {
       showCurrency: document.getElementById('show-currency-btn'),
-      showServices: document.getElementById('show-services-btn')
-      // REMOVED: There is no element with id 'show-info-btn' in the HTML.
-      // showInfo: document.getElementById('show-info-btn'), 
+      showServices: document.getElementById('show-services-btn'),
     };
-    
-    // --- Header Template for Main Page ---
+
     const mainHeaderHTML = `
       <div class="bot-name">SierraBravo</div>
       <div class="status-indicator">
@@ -160,31 +182,35 @@
 
     // --- Navigation and Header Management ---
     function showPage(pageId, title) {
-      // Hide all pages
-      Object.values(pages).forEach(page => {
-        // Added a check to ensure the page element exists before accessing its classList
-        if (page) {
-          page.classList.add('hidden');
-        }
+      Object.values(pages).forEach((page) => {
+        if (page) page.classList.add('hidden');
       });
-      // Show the target page
-      if (pages[pageId]) {
-        pages[pageId].classList.remove('hidden');
-      }
+      if (pages[pageId]) pages[pageId].classList.remove('hidden');
 
       if (pageId === 'main') {
         header.innerHTML = mainHeaderHTML;
-        checkPing(); // Check ping when showing the main page
+        checkPing();
+        if (tg) tg.BackButton.hide();
       } else {
-        // Build the header for sub-pages dynamically
         header.innerHTML = `
-            <button id="back-button">←</button>
             <div class="page-title">${title}</div>
-            <div style="width: 28px;"></div> `;
-        document.getElementById('back-button').addEventListener('click', () => showPage('main'));
+            <div style="width: 28px;"></div>`;
+
+        if (tg) {
+          // Use Telegram's native hardware/UI back button instead of a
+          // custom on-screen one, so it matches the rest of the app chrome.
+          tg.BackButton.show();
+          tg.BackButton.offClick(handleBack);
+          tg.BackButton.onClick(handleBack);
+        }
       }
     }
-    
+
+    function handleBack() {
+      haptic('light');
+      showPage('main');
+    }
+
     // --- Data Fetching ---
     async function checkPing() {
       const pingElement = document.getElementById('ping-value');
@@ -192,7 +218,6 @@
       pingElement.textContent = 'Pinging...';
       const startTime = Date.now();
       try {
-        // Assuming a '/api/ping' endpoint exists
         await fetch('/api/ping', { cache: 'no-store' });
         pingElement.textContent = `${Date.now() - startTime} ms`;
       } catch {
@@ -201,48 +226,55 @@
       }
     }
 
+    // Renders either:
+    //  - a computed change object { abs, percent } (gold, and tether once history exists)
+    //  - a plain fallback string (tether's rawChange, before any history exists)
+    function renderChange(change, fallbackText) {
+      if (change && typeof change === 'object' && Number.isFinite(change.abs) && Number.isFinite(change.percent)) {
+        const sign = change.abs >= 0 ? '+' : '';
+        const cls = change.abs >= 0 ? 'change-up' : 'change-down';
+        const arrow = change.abs >= 0 ? '▲' : '▼';
+        return `<span class="${cls}">${arrow} ${sign}${Math.round(change.abs).toLocaleString()} (${sign}${change.percent.toFixed(2)}%)</span>`;
+      }
+      if (fallbackText) return fallbackText;
+      return '--';
+    }
+
     async function fetchCurrencyData() {
-        showPage('currency', 'Market Summary'); // Pass the title for the header
-        const loader = document.getElementById('currency-loader');
-        const card = document.getElementById('currency-data-card');
-        loader.classList.remove('hidden');
-        card.classList.add('hidden');
+      haptic('light');
+      showPage('currency', 'Market Summary');
+      const loader = document.getElementById('currency-loader');
+      const card = document.getElementById('currency-data-card');
+      loader.classList.remove('hidden');
+      card.classList.add('hidden');
 
-        try {
-            // Assuming a '/api/currency' endpoint exists
-            const response = await fetch('/api/currency');
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || 'Failed to fetch');
+      try {
+        const response = await fetch('/api/currency');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Failed to fetch');
 
-            document.getElementById('gold-price').textContent = data.gold.value;
-            document.getElementById('tether-price').textContent = data.tether.value;
-            
-            document.getElementById('gold-change').innerHTML = data.gold.change;
-            document.getElementById('tether-change').innerHTML = data.tether.change;
-            
-            loader.classList.add('hidden');
-            card.classList.remove('hidden');
-        } catch (error) {
-            loader.textContent = `Error: ${error.message}`;
-            console.error('Error fetching currency data:', error);
-        }
+        document.getElementById('gold-price').textContent = `${Number(data.gold.value).toLocaleString()} Toman`;
+        document.getElementById('tether-price').textContent = `${Number(data.tether.value).toLocaleString()} Toman`;
+
+        document.getElementById('gold-change').innerHTML = renderChange(data.gold.change);
+        document.getElementById('tether-change').innerHTML = renderChange(data.tether.change, data.tether.rawChange);
+
+        loader.classList.add('hidden');
+        card.classList.remove('hidden');
+      } catch (error) {
+        loader.textContent = `Error: ${error.message}`;
+        console.error('Error fetching currency data:', error);
+      }
     }
 
     async function showServicesPage() {
-      showPage('services-page', 'Services');
+      haptic('light');
+      showPage('services', 'Services');
     }
 
     // --- Event Listeners ---
-    if (buttons.showCurrency) {
-      buttons.showCurrency.addEventListener('click', fetchCurrencyData);
-    }
-
-    if (buttons.showServices) {
-      buttons.showServices.addEventListener('click', showServicesPage)
-    }
-    
-    // REMOVED: This would cause an error because buttons.showInfo does not exist.
-    // buttons.showInfo.addEventListener('click', () => showPage('info', 'Your Info'));
+    if (buttons.showCurrency) buttons.showCurrency.addEventListener('click', fetchCurrencyData);
+    if (buttons.showServices) buttons.showServices.addEventListener('click', showServicesPage);
 
     // --- Initial Load ---
     window.addEventListener('load', () => {

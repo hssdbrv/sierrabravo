@@ -199,3 +199,38 @@ async function sendMediaGroup(chatId, images, env) {
 
 // expose sendMediaGroup
 telegramApi.sendMediaGroup = sendMediaGroup;
+
+/**
+ * Configure the persistent chat menu button (the button next to the message
+ * input in Telegram) to open this bot's Mini App. Calling this with no
+ * chat_id sets the DEFAULT menu button for all users who haven't customized
+ * their own. This only needs to be called once (or whenever the URL changes).
+ * @param {object} env Worker env (expects env.BOT_TOKEN and env.WEBAPP_URL)
+ */
+async function setChatMenuButton(env) {
+  if (!env.WEBAPP_URL) throw new Error('env.WEBAPP_URL is not configured');
+
+  const url = `https://api.telegram.org/bot${env.BOT_TOKEN}/setChatMenuButton`;
+  const payload = {
+    menu_button: {
+      type: 'web_app',
+      text: 'Open App',
+      web_app: { url: env.WEBAPP_URL },
+    },
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch((e) => { throw new Error(`Telegram response parse error: ${e.message}`); });
+  if (!res.ok || data.ok === false) {
+    const errMsg = data && data.description ? data.description : `HTTP ${res.status}`;
+    throw new Error(`Telegram API error: ${errMsg}`);
+  }
+  return data;
+}
+
+telegramApi.setChatMenuButton = setChatMenuButton;

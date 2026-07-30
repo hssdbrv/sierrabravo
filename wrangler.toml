@@ -8,6 +8,7 @@ triggers = { crons = ["0 */1 * * *"] }
 [vars]
 CHANNEL_ID = "-1003210944986"
 BOT_TOKEN = "7533670157:AAG7QCnC0vxlMOkUqw5mqCsmnldvLgUChSI"
+WEBAPP_URL = "https://sierrabravo.hssdbrv.workers.dev"
 
 [[d1_databases]]
 binding = "DB"
