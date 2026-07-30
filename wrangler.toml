@@ -2,8 +2,8 @@ name = "sierrabravo"
 main = "src/index.js"
 compatibility_date = "2023-11-21"
 
-# Scheduled triggers (cron). Runs every 1 hour (minute 0).
-triggers = { crons = ["0 */1 * * *"] }
+# Scheduled triggers (cron)
+triggers = { crons = ["*/10 * * * *"] }
 
 [vars]
 CHANNEL_ID = "-1003210944986"
