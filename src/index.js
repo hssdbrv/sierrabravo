@@ -42,7 +42,7 @@ async function performScheduledCurrencyUpdate(env) {
 
     if (!goldData || !tetherData) throw new Error('Could not parse all required data.');
 
-    const message = `قیمت‌ها:\n\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})`;
+    const message = `قیمت‌ها:\n\nطلای ۱۸ عیار: ${goldData.value} (${goldData.change})\nتتر: ${tetherData.value} (${tetherData.change})\n\n#قیمت #طلا #دلار`;
 
     // Insert values into D1 `prices` table if binding available.
     // We store the raw values (without the 'change') and an ISO datetime.
